@@ -1,5 +1,6 @@
 package oop.project.library.command;
 
+import oop.project.library.argument.ParseFailure;
 import oop.project.library.input.BasicArgs;
 import oop.project.library.input.Input;
 
@@ -122,15 +123,15 @@ public final class CommandSpec {
 
     private void parsePositionals(BasicArgs args, Map<String, Object> values) {
         if (args.positional().size() > positionalSpecs.size()) {
-            throw new RuntimeException("Command '" + name + "' received too many positional arguments.");
+            throw new ParseFailure("Command '" + name + "' received too many positional arguments.");
         }
 
         for (int i = 0; i < positionalSpecs.size(); i++) {
             ValueSpec<?> spec = positionalSpecs.get(i);
             if (i < args.positional().size()) {
-                values.put(spec.name(), spec.type().parse(args.positional().get(i)));
+                values.put(spec.name(), parseRaw(spec, args.positional().get(i)));
             } else if (spec.required()) {
-                throw new RuntimeException("Missing positional argument '" + spec.name() + "'.");
+                throw new ParseFailure("Missing positional argument '" + spec.name() + "'.");
             } else {
                 values.put(spec.name(), spec.defaultValue());
             }
@@ -141,21 +142,21 @@ public final class CommandSpec {
         for (Map.Entry<String, String> entry : args.named().entrySet()) {
             ValueSpec<?> spec = resolveNamed(entry.getKey());
             if (spec == null) {
-                throw new RuntimeException("Unknown named argument '" + entry.getKey() + "'.");
+                throw new ParseFailure("Unknown named argument '" + entry.getKey() + "'.");
             }
 
             String raw = entry.getValue();
             if (raw.isEmpty()) {
-                throw new RuntimeException("Named argument '" + spec.name() + "' requires a value.");
+                throw new ParseFailure("Named argument '" + spec.name() + "' requires a value.");
             }
 
-            values.put(spec.name(), spec.type().parse(raw));
+            values.put(spec.name(), parseRaw(spec, raw));
         }
 
         for (ValueSpec<?> spec : namedSpecs) {
             if (!values.containsKey(spec.name())) {
                 if (spec.required()) {
-                    throw new RuntimeException("Missing named argument '" + spec.name() + "'.");
+                    throw new ParseFailure("Missing named argument '" + spec.name() + "'.");
                 }
                 values.put(spec.name(), spec.defaultValue());
             }
@@ -169,5 +170,13 @@ public final class CommandSpec {
             }
         }
         return null;
+    }
+
+    private static Object parseRaw(ValueSpec<?> spec, String raw) {
+        try {
+            return spec.type().parse(raw);
+        } catch (ParseFailure e) {
+            throw new ParseFailure("Invalid value for '" + spec.name() + "': " + e.getMessage(), e);
+        }
     }
 }

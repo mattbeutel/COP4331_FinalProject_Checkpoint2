@@ -3,6 +3,7 @@ package oop.project.library.command;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public final class ParsedCommand {
 
@@ -25,5 +26,32 @@ public final class ParsedCommand {
             throw new IllegalArgumentException("Unknown argument '" + name + "'.");
         }
         return values.get(name);
+    }
+
+    public <T> T get(String name, Class<T> type) {
+        Objects.requireNonNull(type, "type");
+        Object value = get(name);
+        if (!type.isInstance(value)) {
+            throw new IllegalArgumentException(
+                    "Argument '" + name + "' is a " + value.getClass().getSimpleName() + ", not a " + type.getSimpleName() + "."
+            );
+        }
+        return type.cast(value);
+    }
+
+    public int getInt(String name) {
+        return get(name, Integer.class);
+    }
+
+    public double getDouble(String name) {
+        return get(name, Double.class);
+    }
+
+    public boolean getBoolean(String name) {
+        return get(name, Boolean.class);
+    }
+
+    public String getString(String name) {
+        return get(name, String.class);
     }
 }
