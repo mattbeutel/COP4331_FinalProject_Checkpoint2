@@ -3,7 +3,9 @@ package oop.project.library.argument;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 public final class ArgumentTypes {
@@ -80,6 +82,35 @@ public final class ArgumentTypes {
                 throw new ParseFailure("Failed to parse " + description + " from '" + raw + "'.", e);
             }
         });
+    }
+
+    public static Validator<Integer> intRange(int minInclusive, int maxInclusive) {
+        return value -> {
+            if (value < minInclusive || value > maxInclusive) {
+                throw new ParseFailure(
+                        "Expected integer in range [" + minInclusive + ", " + maxInclusive + "] but got " + value + "."
+                );
+            }
+        };
+    }
+
+    public static Validator<Double> doubleRange(double minInclusive, double maxInclusive) {
+        return value -> {
+            if (value < minInclusive || value > maxInclusive) {
+                throw new ParseFailure(
+                        "Expected double in range [" + minInclusive + ", " + maxInclusive + "] but got " + value + "."
+                );
+            }
+        };
+    }
+
+    public static Validator<String> choices(String... allowedValues) {
+        Set<String> allowed = new LinkedHashSet<>(Arrays.asList(allowedValues));
+        return value -> {
+            if (!allowed.contains(value)) {
+                throw new ParseFailure("Expected one of " + allowed + " but got '" + value + "'.");
+            }
+        };
     }
 
 }
