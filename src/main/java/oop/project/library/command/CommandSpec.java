@@ -20,6 +20,7 @@ public final class CommandSpec {
         private final String name;
         private final List<ValueSpec<?>> positionalSpecs = new ArrayList<>();
         private final List<ValueSpec<?>> namedSpecs = new ArrayList<>();
+        private final Map<String, CommandSpec> subcommands = new LinkedHashMap<>();
 
         private Builder(String name) {
             this.name = Objects.requireNonNull(name, "name");
@@ -37,8 +38,13 @@ public final class CommandSpec {
             return this;
         }
 
+        public Builder subcommand(String token, CommandSpec spec) {
+            subcommands.put(Objects.requireNonNull(token, "token"), Objects.requireNonNull(spec, "spec"));
+            return this;
+        }
+
         public CommandSpec build() {
-            return new CommandSpec(name, positionalSpecs, namedSpecs);
+            return new CommandSpec(name, positionalSpecs, namedSpecs, subcommands);
         }
 
         private static void requireKind(ValueSpec<?> spec, ValueSpec.Kind expected) {
@@ -52,11 +58,18 @@ public final class CommandSpec {
     private final String name;
     private final List<ValueSpec<?>> positionalSpecs;
     private final List<ValueSpec<?>> namedSpecs;
+    private final Map<String, CommandSpec> subcommands;
 
-    private CommandSpec(String name, List<ValueSpec<?>> positionalSpecs, List<ValueSpec<?>> namedSpecs) {
+    private CommandSpec(
+            String name,
+            List<ValueSpec<?>> positionalSpecs,
+            List<ValueSpec<?>> namedSpecs,
+            Map<String, CommandSpec> subcommands
+    ) {
         this.name = name;
         this.positionalSpecs = List.copyOf(positionalSpecs);
         this.namedSpecs = List.copyOf(namedSpecs);
+        this.subcommands = Map.copyOf(subcommands);
     }
 
     public ParsedCommand parse(String rawArguments) {
@@ -64,6 +77,10 @@ public final class CommandSpec {
     }
 
     public ParsedCommand parse(BasicArgs args) {
+        if (!subcommands.isEmpty()) {
+            return parseWithSubcommands(args);
+        }
+
         Map<String, Object> values = new LinkedHashMap<>();
         parsePositionals(args, values);
         parseNamed(args, values);
@@ -121,6 +138,24 @@ public final class CommandSpec {
         }
     }
 
+    private ParsedCommand parseWithSubcommands(BasicArgs args) {
+        if (args.positional().isEmpty()) {
+            throw new ParseFailure("Command '" + name + "' requires a subcommand.");
+        }
+
+        String token = args.positional().getFirst();
+        CommandSpec subcommand = subcommands.get(token);
+        if (subcommand == null) {
+            throw new ParseFailure("Unknown subcommand '" + token + "' for command '" + name + "'.");
+        }
+
+        BasicArgs remaining = new BasicArgs(
+                new ArrayList<>(args.positional().subList(1, args.positional().size())),
+                new LinkedHashMap<>(args.named())
+        );
+        return subcommand.parse(remaining);
+    }
+
     private void parsePositionals(BasicArgs args, Map<String, Object> values) {
         if (args.positional().size() > positionalSpecs.size()) {
             throw new ParseFailure("Command '" + name + "' received too many positional arguments.");
@@ -147,10 +182,13 @@ public final class CommandSpec {
 
             String raw = entry.getValue();
             if (raw.isEmpty()) {
-                throw new ParseFailure("Named argument '" + spec.name() + "' requires a value.");
+                if (!spec.allowImplicitFlagValue()) {
+                    throw new ParseFailure("Named argument '" + spec.name() + "' requires a value.");
+                }
+                values.put(spec.name(), spec.implicitFlagValue());
+            } else {
+                values.put(spec.name(), parseRaw(spec, raw));
             }
-
-            values.put(spec.name(), parseRaw(spec, raw));
         }
 
         for (ValueSpec<?> spec : namedSpecs) {
