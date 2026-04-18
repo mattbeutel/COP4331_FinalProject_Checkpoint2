@@ -1,105 +1,95 @@
 package oop.project.library.scenarios;
 
-import oop.project.library.argument.ArgumentType;
 import oop.project.library.argument.ArgumentTypes;
-import oop.project.library.argument.ParseFailure;
-import oop.project.library.input.Input;
+import oop.project.library.command.CommandSpec;
+import oop.project.library.command.ParsedCommand;
+import oop.project.library.command.ValueSpec;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.time.LocalDate;
+import java.util.Locale;
 import java.util.Map;
 
 public final class ArgumentScenarios {
 
-    private static final ArgumentType<Integer> INT = ArgumentTypes.integer();
-    private static final ArgumentType<Double> DOUBLE = ArgumentTypes.decimal();
-    private static final ArgumentType<String> STRING = ArgumentTypes.string();
-    private static final ArgumentType<java.time.LocalDate> DATE = ArgumentTypes.localDate();
+    private enum Difficulty {
+        PEACEFUL,
+        EASY,
+        NORMAL,
+        HARD
+    }
 
-    private static final ArgumentType<Integer> POSITIVE_INT =
-            ArgumentTypes.integer().validate(ArgumentTypes.intRange(1, Integer.MAX_VALUE));
+    private static final CommandSpec ADD = CommandSpec.builder("add")
+            .positional(ValueSpec.positional("left", ArgumentTypes.integer()))
+            .positional(ValueSpec.positional("right", ArgumentTypes.integer()))
+            .build();
 
-    private static final ArgumentType<String> DIFFICULTY =
-            ArgumentTypes.string().validate(ArgumentTypes.choices("easy", "medium", "hard"));
+    private static final CommandSpec SUB = CommandSpec.builder("sub")
+            .positional(ValueSpec.positional("left", ArgumentTypes.decimal()))
+            .positional(ValueSpec.positional("right", ArgumentTypes.decimal()))
+            .build();
+
+    private static final CommandSpec FIZZBUZZ = CommandSpec.builder("fizzbuzz")
+            .positional(ValueSpec.positional("number", ArgumentTypes.integer().validate(ArgumentTypes.intRange(1, 100))))
+            .build();
+
+    private static final CommandSpec DIFFICULTY = CommandSpec.builder("difficulty")
+            .positional(ValueSpec.positional("difficulty", ArgumentTypes.enumType(Difficulty.class)))
+            .build();
+
+    private static final CommandSpec DATE = CommandSpec.builder("date")
+            .positional(ValueSpec.positional("date", ArgumentTypes.localDate()))
+            .build();
 
     public static Map<String, Object> add(String arguments) throws RuntimeException {
-        List<String> tokens = positionalTokens(arguments, "add", 2);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("left", parse("add", "left", INT, tokens.get(0)));
-        result.put("right", parse("add", "right", INT, tokens.get(1)));
-        return result;
+        try {
+            ParsedCommand parsed = ADD.parse(arguments);
+            int left = parsed.getInt("left");
+            int right = parsed.getInt("right");
+            return Map.of("left", left, "right", right);
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Invalid add input: " + e.getMessage(), e);
+        }
     }
 
     public static Map<String, Object> sub(String arguments) throws RuntimeException {
-        List<String> tokens = positionalTokens(arguments, "sub", 2);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("left", parse("sub", "left", DOUBLE, tokens.get(0)));
-        result.put("right", parse("sub", "right", DOUBLE, tokens.get(1)));
-        return result;
+        try {
+            ParsedCommand parsed = SUB.parse(arguments);
+            double left = parsed.getDouble("left");
+            double right = parsed.getDouble("right");
+            return Map.of("left", left, "right", right);
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Invalid sub input: " + e.getMessage(), e);
+        }
     }
 
     public static Map<String, Object> fizzbuzz(String arguments) throws RuntimeException {
-        List<String> tokens = positionalTokens(arguments, "fizzbuzz", 1);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("number", parse("fizzbuzz", "number", POSITIVE_INT, tokens.get(0)));
-        return result;
+        try {
+            ParsedCommand parsed = FIZZBUZZ.parse(arguments);
+            int number = parsed.getInt("number");
+            return Map.of("number", number);
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Invalid fizzbuzz input: " + e.getMessage(), e);
+        }
     }
 
     public static Map<String, Object> difficulty(String arguments) throws RuntimeException {
-        List<String> tokens = positionalTokens(arguments, "difficulty", 1);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("difficulty", parse("difficulty", "difficulty", DIFFICULTY, tokens.get(0)));
-        return result;
+        try {
+            ParsedCommand parsed = DIFFICULTY.parse(arguments);
+            Difficulty difficulty = parsed.get("difficulty", Difficulty.class);
+            return Map.of("difficulty", difficulty.name().toLowerCase(Locale.ROOT));
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Invalid difficulty input: " + e.getMessage(), e);
+        }
     }
 
     public static Map<String, Object> date(String arguments) throws RuntimeException {
-        List<String> tokens = positionalTokens(arguments, "date", 1);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("date", parse("date", "date", DATE, tokens.get(0)));
-        return result;
-    }
-
-    private static <T> T parse(String scenario, String name, ArgumentType<T> type, String raw) {
         try {
-            return type.parse(raw);
-        } catch (ParseFailure e) {
-            throw new RuntimeException("Invalid " + scenario + " input: invalid " + name + ": " + e.getMessage(), e);
+            ParsedCommand parsed = DATE.parse(arguments);
+            LocalDate date = parsed.get("date", LocalDate.class);
+            return Map.of("date", date);
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Invalid date input: " + e.getMessage(), e);
         }
-    }
-
-    private static List<String> positionalTokens(String arguments, String scenario, int expectedCount) {
-        Input input = new Input(arguments);
-        List<String> tokens = new ArrayList<>();
-
-        while (true) {
-            Input.Value value = input.parseValue().orElse(null);
-            if (value == null) {
-                break;
-            }
-
-            switch (value) {
-                case Input.Value.Literal(String literal) -> tokens.add(literal);
-                case Input.Value.QuotedString(String quoted) -> tokens.add(quoted);
-                case Input.Value.SingleFlag(String name) ->
-                        throw new RuntimeException("Invalid " + scenario + " input: unexpected named argument -" + name);
-                case Input.Value.DoubleFlag(String name) ->
-                        throw new RuntimeException("Invalid " + scenario + " input: unexpected named argument --" + name);
-            }
-        }
-
-        if (tokens.size() != expectedCount) {
-            throw new RuntimeException(
-                    "Invalid " + scenario + " input: expected " + expectedCount + " argument(s) but got " + tokens.size()
-            );
-        }
-
-        return tokens;
     }
 
 }
