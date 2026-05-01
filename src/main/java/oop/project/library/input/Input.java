@@ -1,7 +1,10 @@
 package oop.project.library.input;
 
+import oop.project.library.argument.ParseException;
+
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Optional;
 
 public final class Input {
@@ -21,52 +24,96 @@ public final class Input {
     }
 
     public BasicArgs parseBasicArgs() {
-        var args = new BasicArgs(new ArrayList<>(), new HashMap<>());
+        List<Value> tokens = new ArrayList<>();
         while (true) {
-            switch (parseValue().orElse(null)) {
-                case null -> { return args; }
-                case Value.Literal(String value) -> args.positional().add(value);
-                case Value.QuotedString(String value) -> args.positional().add(value);
-                case Value.SingleFlag(String name) -> args.named().put(name, "");
-                case Value.DoubleFlag(String name) -> {
-                    switch (parseValue().orElse(null)) {
-                        case Value.Literal(String value) -> args.named().put(name, value);
-                        case Value.QuotedString(String value) -> args.named().put(name, value);
-                        case null, default -> throw new RuntimeException("Double flag --" + name + " is missing a value @ index " + index + ".");
-                    }
-                }
+            Value value = parseValue().orElse(null);
+            if (value == null) {
+                break;
+            }
+            tokens.add(value);
+        }
+
+        BasicArgs args = new BasicArgs(new ArrayList<>(), new LinkedHashMap<>());
+        for (int tokenIndex = 0; tokenIndex < tokens.size(); tokenIndex++) {
+            Value token = tokens.get(tokenIndex);
+            if (token instanceof Value.Literal literal) {
+                args.positional().add(literal.value());
+            } else if (token instanceof Value.QuotedString quotedString) {
+                args.positional().add(quotedString.value());
+            } else if (token instanceof Value.SingleFlag singleFlag) {
+                tokenIndex += attachNamedValue(args, tokens, tokenIndex, singleFlag.name());
+            } else if (token instanceof Value.DoubleFlag doubleFlag) {
+                tokenIndex += attachNamedValue(args, tokens, tokenIndex, doubleFlag.name());
             }
         }
+        return args;
     }
 
     public Optional<Value> parseValue() {
-        while (index < chars.length && chars[index] == ' ') { index++; }
+        while (index < chars.length && chars[index] == ' ') {
+            index++;
+        }
         if (index >= chars.length) {
             return Optional.empty();
-        } else if (chars[index] == '"') {
-            var start = index;
-            do { index++; } while (index < chars.length && chars[index] != '"');
+        }
+
+        if (chars[index] == '"') {
+            int start = index;
+            do {
+                index++;
+            } while (index < chars.length && chars[index] != '"');
             if (index >= chars.length) {
-                throw new RuntimeException("Unterminated quoted string @ index " + start + ".");
+                throw new ParseException("Unterminated quoted string @ index " + start + ".");
             }
-            var value = new String(chars, start + 1, index - start - 1);
+            String value = new String(chars, start + 1, index - start - 1);
             index++;
             return Optional.of(new Value.QuotedString(value));
-        } else {
-            var start = index;
-            do { index++; } while (index < chars.length && chars[index] != ' ' && chars[index] != '"');
-            if (index < chars.length && chars[index] == '"') {
-                throw new RuntimeException("Invalid quote within literal @ index " + index + ".");
-            }
-            var value = new String(chars, start, index - start);
-            if (value.startsWith("-") && value.length() > 1 && Character.isLetter(value.charAt(1))) {
-                return Optional.of(new Value.SingleFlag(value.substring(1)));
-            } else if (value.startsWith("--") && value.length() > 2 && Character.isLetter(value.charAt(2))) {
-                return Optional.of(new Value.DoubleFlag(value.substring(2)));
-            } else {
-                return Optional.of(new Value.Literal(value));
-            }
         }
+
+        int start = index;
+        do {
+            index++;
+        } while (index < chars.length && chars[index] != ' ' && chars[index] != '"');
+        if (index < chars.length && chars[index] == '"') {
+            throw new ParseException("Invalid quote within literal @ index " + index + ".");
+        }
+
+        String value = new String(chars, start, index - start);
+        if (value.startsWith("--") && value.length() > 2 && Character.isLetter(value.charAt(2))) {
+            return Optional.of(new Value.DoubleFlag(value.substring(2)));
+        }
+        if (value.startsWith("-") && value.length() > 1 && Character.isLetter(value.charAt(1))) {
+            return Optional.of(new Value.SingleFlag(value.substring(1)));
+        }
+        return Optional.of(new Value.Literal(value));
+    }
+
+    private static int attachNamedValue(BasicArgs args, List<Value> tokens, int tokenIndex, String rawName) {
+        String name = rawName;
+        int equalsIndex = rawName.indexOf('=');
+        if (equalsIndex >= 0) {
+            name = rawName.substring(0, equalsIndex);
+            String inlineValue = rawName.substring(equalsIndex + 1);
+            args.named().put(name, inlineValue);
+            return 0;
+        }
+
+        if (tokenIndex + 1 >= tokens.size()) {
+            args.named().put(name, "");
+            return 0;
+        }
+
+        Value next = tokens.get(tokenIndex + 1);
+        if (next instanceof Value.Literal literal) {
+            args.named().put(name, literal.value());
+            return 1;
+        }
+        if (next instanceof Value.QuotedString quotedString) {
+            args.named().put(name, quotedString.value());
+            return 1;
+        }
+        args.named().put(name, "");
+        return 0;
     }
 
 }

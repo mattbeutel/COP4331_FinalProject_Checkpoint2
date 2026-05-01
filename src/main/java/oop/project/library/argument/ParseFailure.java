@@ -1,9 +1,12 @@
 package oop.project.library.argument;
 
 /**
- * Library-level parse/validation failure.
+ * Backwards-compatible alias for {@link ParseException}.
+ *
+ * @deprecated prefer {@link ParseException} for new code.
  */
-public class ParseFailure extends RuntimeException {
+@Deprecated
+public class ParseFailure extends ParseException {
 
     public ParseFailure(String message) {
         super(message);

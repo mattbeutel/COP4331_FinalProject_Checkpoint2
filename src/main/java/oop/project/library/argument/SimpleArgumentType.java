@@ -2,28 +2,23 @@ package oop.project.library.argument;
 
 import java.util.Objects;
 
-public final class SimpleArgumentType<T> implements ArgumentType<T> {
+/**
+ * Small reusable {@link ArgumentType} implementation backed by a parser callback.
+ */
+public record SimpleArgumentType<T>(String description, Parser<T> parser) implements ArgumentType<T> {
 
     @FunctionalInterface
     public interface Parser<T> {
-        T parse(String raw) throws ParseFailure;
+        T parse(String raw) throws ParseException;
     }
 
-    private final String description;
-    private final Parser<T> parser;
-
-    public SimpleArgumentType(String description, Parser<T> parser) {
-        this.description = Objects.requireNonNull(description, "description");
-        this.parser = Objects.requireNonNull(parser, "parser");
+    public SimpleArgumentType {
+        Objects.requireNonNull(description, "description");
+        Objects.requireNonNull(parser, "parser");
     }
 
     @Override
-    public String description() {
-        return description;
-    }
-
-    @Override
-    public T parse(String raw) throws ParseFailure {
+    public T parse(String raw) throws ParseException {
         return parser.parse(raw);
     }
 

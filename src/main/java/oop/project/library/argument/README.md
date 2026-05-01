@@ -1,38 +1,45 @@
 # Argument System
 
-Handles parsing a single String input value into typed data.
+Handles parsing a single `String` token into typed data.
 
 ## Development Notes
 
-- `ArgumentType<T>` is the core polymorphic abstraction. New types are added by composition rather than by hardcoding special behavior into commands or scenarios.
-- Validation is layered on top of parsing with `validate(...)`, which keeps concerns separate and makes ranges, choices, and regex checks reusable.
-- `ParseFailure` is the standardized error type for parse and validation problems inside the library.
-- `ArgumentTypes` contains built-in parsers for primitives and extensibility helpers for custom and enum-backed parsing.
-- Enum parsing is case-insensitive so scenario inputs can be ergonomic while still producing strongly typed values.
+- `ArgumentType<T>` remains the main polymorphic abstraction. It models exactly one concern: `String -> Parsed Value`.
+- `ParseException` is unchecked because parse failures represent invalid user input at runtime, not a recoverable compile-time contract violation. The scenarios catch it at the boundary where user-facing errors are produced.
+- `ArgumentTypes` now exposes stable built-in parsers as constants plus small convenience accessors for common use.
+- `Validators` mirrors `ArgumentTypes` so reusable validation logic is discoverable without putting every helper on the parser namespace itself.
+- Numeric range validation is implemented generically through `Validators.range(...)`, with `integerRange(...)` and `doubleRange(...)` as convenience wrappers.
+- `LocalDate` parsing was removed from the library surface and is now expressed as a custom argument in the scenario, which better matches the assignment's expectation that domain-specific types live in user code.
 
-## MVP Design Analysis
+## Feature Showcase
+
+- `ticket AAA-1234`
+    - Demonstrates a custom parser that combines regex matching and structured parsing into a domain value rather than returning a raw `String`.
+    - Returned map: `{prefix=AAA, number=1234}`
+
+## MLP Design Analysis
 
 ### Individual Review (Argument Lead)
 
 Good:
-- The library keeps parsing and validation separate, which makes the API easier to extend.
-- Enum, regex, and custom parser support all fit into the same abstraction instead of requiring special-case scenario logic.
+- `ArgumentType<T>` stays lightweight and focused, so adding new parsers does not require subclass trees or command-specific logic.
+- Separating `Validators` from `ArgumentTypes` keeps the API easier to navigate while still allowing parse-and-validate composition.
 
 Less good:
-- `ArgumentTypes` is convenient, but it centralizes many helpers into one utility class rather than a more discoverable package structure.
-- The library currently focuses on parsing correctness and does not expose richer metadata such as usage/help text.
+- The library still uses callback-based composition for many features, which is flexible but may feel abstract to first-time users.
+- `description()` is currently used mainly for documentation and error context rather than for richer generated help text.
 
 ### Individual Review (Command Lead)
 
 Good:
-- The argument layer integrates cleanly into command definitions without leaking command-specific responsibilities into the parser abstraction.
-- Standardized `ParseFailure` messages make it straightforward for commands to wrap failures with argument context.
+- The argument layer no longer knows anything about argument names or command structure.
+- Custom types remain easy to define from user code, which keeps the library useful beyond the fixed scenarios.
 
 Less good:
-- Some advanced validation patterns, such as cross-field validation, are still outside the scope of the current design.
-- We normalize enum casing for usability, but there is not yet a configurable casing policy for all parsers.
+- There is still some overlap between parsing and validation because validators wrap parser results; this is acceptable, but the boundary is conceptual rather than enforced by different object types.
+- Showcase-level structured values currently rely on scenario-local records rather than library-provided domain containers.
 
 ### Team Review
 
-- We agree that keeping the argument layer independent from command structure was the right decision.
-- We still see room to improve how custom types and validators are documented so the API is more self-explanatory for first-time users.
+- We agree that moving generic validation helpers into `Validators` made the public API easier to understand.
+- We still see room to improve discoverability around composing custom parsers and validators for brand-new users.

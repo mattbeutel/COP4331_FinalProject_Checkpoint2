@@ -3,11 +3,24 @@ package oop.project.library.argument;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+/**
+ * Parses a single raw string token into a typed value.
+ */
 public interface ArgumentType<T> {
 
+    /**
+     * Human-readable name for the kind of value this argument parses.
+     */
     String description();
 
-    T parse(String raw) throws ParseFailure;
+    /**
+     * Parses a single raw token into a typed value.
+     *
+     * @param raw raw user input for one argument value
+     * @return parsed typed value
+     * @throws ParseException when the token is not a valid value for this argument type
+     */
+    T parse(String raw) throws ParseException;
 
     default ArgumentType<T> validate(Validator<? super T> validator) {
         ArgumentType<T> self = this;
@@ -21,7 +34,7 @@ public interface ArgumentType<T> {
     default ArgumentType<T> validate(Predicate<? super T> predicate, String message) {
         return validate(value -> {
             if (!predicate.test(value)) {
-                throw new ParseFailure(message);
+                throw new ParseException(message);
             }
         });
     }
